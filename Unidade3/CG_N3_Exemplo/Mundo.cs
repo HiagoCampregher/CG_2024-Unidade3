@@ -1,4 +1,4 @@
-﻿#define CG_DEBUG
+﻿﻿#define CG_DEBUG
 #define CG_Gizmo      
 #define CG_OpenGL      
 // #define CG_OpenTK
@@ -22,6 +22,8 @@ namespace gcgcg
 
         private char rotuloAtual = '?';
         private Objeto objetoSelecionado = null;
+
+        private EditorVetorial editorVetorial;
 
         private readonly float[] _sruEixos =
         [
@@ -65,6 +67,16 @@ namespace gcgcg
             mundo ??= new Objeto(null, ref rotuloAtual); //padrão Singleton
         }
 
+        private Ponto4D GetPontoMouse()
+        {
+            int janelaLargura = ClientSize.X;
+            int janelaAltura = ClientSize.Y;
+            Ponto4D mousePonto = new Ponto4D(MousePosition.X, MousePosition.Y);
+            Ponto4D sruPonto = Utilitario.NDC_TelaSRU(janelaLargura, janelaAltura, mousePonto);
+
+            return sruPonto;
+        }
+
         protected override void OnLoad()
         {
             base.OnLoad();
@@ -96,22 +108,13 @@ namespace gcgcg
             GL.EnableVertexAttribArray(0);
             #endregion
 
-            #region Objeto: polígono qualquer  
-            List<Ponto4D> pontosPoligonoBandeira = new List<Ponto4D>();
-            pontosPoligonoBandeira.Add(new Ponto4D(0.25, 0.25));  // A = (0.25, 0.25)
-            pontosPoligonoBandeira.Add(new Ponto4D(0.75, 0.25));  // B = (0.75, 0.25)
-            pontosPoligonoBandeira.Add(new Ponto4D(0.75, 0.75));  // C = (0.75, 0.75)
-            pontosPoligonoBandeira.Add(new Ponto4D(0.50, 0.50));  // D = (0.50, 0.50)
-            pontosPoligonoBandeira.Add(new Ponto4D(0.25, 0.75));  // E = (0.25, 0.75)
-            objetoSelecionado = new Poligono(mundo, ref rotuloAtual, pontosPoligonoBandeira);
-            #endregion
-            #region declara um objeto filho ao polígono
-            //List<Ponto4D> pontosPoligonoTriangulo = new List<Ponto4D>();
-            //pontosPoligonoTriangulo.Add(new Ponto4D(0.50, 0.50)); // F = (0.50, 0.50)
-            //pontosPoligonoTriangulo.Add(new Ponto4D(0.75, 0.75)); // G = (0.75, 0.75)
-            //pontosPoligonoTriangulo.Add(new Ponto4D(0.25, 0.75)); // H = (0.25, 0.75)
-            //objetoSelecionado = new Poligono(objetoSelecionado, ref rotuloAtual, pontosPoligonoTriangulo);
-            #endregion
+            editorVetorial = new EditorVetorial(mundo, ref rotuloAtual);
+
+            objetoSelecionado = editorVetorial;
+
+            List<Ponto4D> pontosPoligono = new List<Ponto4D>();
+            Poligono poligono = new Poligono(mundo, ref rotuloAtual, pontosPoligono);
+            editorVetorial.AdicionarPoligono(poligono);
         }
 
         protected override void OnRenderFrame(FrameEventArgs e)
@@ -132,6 +135,8 @@ namespace gcgcg
         }
 
         bool bEnterPressionado = false;
+        bool boxSelecionado = false;
+        
 
         protected override void OnUpdateFrame(FrameEventArgs e)
         {
@@ -152,40 +157,24 @@ namespace gcgcg
             }
             if (estadoTeclado.IsKeyPressed(Keys.D) && bEnterPressionado)
             {
-                objetoSelecionado.PontosLimpar();
+                editorVetorial.RemoverPoligono();
                 bEnterPressionado = false;
             }
             if (estadoTeclado.IsKeyPressed(Keys.V) && bEnterPressionado)
             {
-                int janelaLargura = ClientSize.X;
-                int janelaAltura = ClientSize.Y;
-                Ponto4D mousePonto = new Ponto4D(MousePosition.X, MousePosition.Y);
-                Ponto4D sruPonto = Utilitario.NDC_TelaSRU(janelaLargura, janelaAltura, mousePonto);
-
-                double menorDistancia = 0;
-                int idxPontoMenorDistancia = 0;
-
-                for (int idxPonto = 0; idxPonto < objetoSelecionado.PontosListaTamanho; ++idxPonto)
-                {
-                    double distancia = Matematica.Distancia(sruPonto, objetoSelecionado.PontosId(idxPonto));
-
-                    if (distancia < menorDistancia || idxPonto == 0)
-                    {
-                        idxPontoMenorDistancia = idxPonto;
-                        menorDistancia = distancia;
-                    }
-                }
-
-                objetoSelecionado.PontosAlterar(sruPonto, idxPontoMenorDistancia);
+                editorVetorial.MoverVerticeMaisProximoPoligono(GetPontoMouse());
             }
-
+            if (estadoTeclado.IsKeyPressed(Keys.E) && bEnterPressionado)
+            {
+                editorVetorial.RemoverVerticeMaisProximoPoligono(GetPontoMouse());
+            }
             if (estadoTeclado.IsKeyPressed(Keys.Enter))
             {
                 bEnterPressionado = true;
             }
             if (estadoTeclado.IsKeyPressed(Keys.P) && bEnterPressionado)
             {
-                objetoSelecionado.PrimitivaTipo = PrimitiveType.LineStrip;
+                objetoSelecionado.PrimitivaTipo = (objetoSelecionado.PrimitivaTipo == PrimitiveType.LineStrip) ? PrimitiveType.LineLoop : PrimitiveType.LineStrip;
             }
             if (estadoTeclado.IsKeyPressed(Keys.R) && bEnterPressionado)
             {
@@ -238,36 +227,25 @@ namespace gcgcg
 
             if (MouseState.IsButtonPressed(MouseButton.Left))
             {
-                Console.WriteLine("MouseState.IsButtonPressed(MouseButton.Left)");
-                Console.WriteLine("__ Valores do Espaço de Tela");
-                Console.WriteLine("Vector2 mousePosition: " + MousePosition);
-                Console.WriteLine("Vector2i windowSize: " + ClientSize);
+                editorVetorial.SelecionaPoligono(GetPontoMouse());
             }
-            if (MouseState.IsButtonDown(MouseButton.Right) && objetoSelecionado != null)
+            if (MouseState.IsButtonDown(MouseButton.Right))
             {
                 Console.WriteLine("MouseState.IsButtonDown(MouseButton.Right)");
 
-                if (bEnterPressionado)
+                if (bEnterPressionado && objetoSelecionado != null)
                 {
                     bEnterPressionado = false;
 
-                    int janelaLargura = ClientSize.X;
-                    int janelaAltura = ClientSize.Y;
-                    Ponto4D mousePonto = new Ponto4D(MousePosition.X, MousePosition.Y);
-                    Ponto4D sruPonto = Utilitario.NDC_TelaSRU(janelaLargura, janelaAltura, mousePonto);
-
                     List<Ponto4D> pontosNovoPoligono = new List<Ponto4D>();
-                    pontosNovoPoligono.Add(sruPonto);
+                    pontosNovoPoligono.Add(GetPontoMouse());
                     objetoSelecionado = new Poligono(mundo, ref rotuloAtual, pontosNovoPoligono);
+
+                    editorVetorial.AdicionarPoligono((Poligono)objetoSelecionado);
                 }
                 else
                 {
-                    int janelaLargura = ClientSize.X;
-                    int janelaAltura = ClientSize.Y;
-                    Ponto4D mousePonto = new Ponto4D(MousePosition.X, MousePosition.Y);
-                    Ponto4D sruPonto = Utilitario.NDC_TelaSRU(janelaLargura, janelaAltura, mousePonto);
-
-                    objetoSelecionado.PontosAdicionar(sruPonto);
+                    editorVetorial.AdicionarPontoPoligonoAtual(GetPontoMouse());
                 }
             }
             if (MouseState.IsButtonReleased(MouseButton.Right))
